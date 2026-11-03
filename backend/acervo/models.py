@@ -1,4 +1,6 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.utils import timezone
 from django.db import models
 
 
@@ -78,6 +80,22 @@ class Trabalho(models.Model):
         ordering = ['-ano', 'titulo', 'pk']
         verbose_name = 'trabalho'
         verbose_name_plural = 'trabalhos'
+
+    def clean(self):
+        erros = {}
+        if self.ano and self.ano > timezone.localdate().year:
+            erros['ano'] = 'O ano não pode ser maior que o ano corrente.'
+        if self.situacao == self.Situacao.PUBLICADO:
+            if self.nota is None:
+                erros['nota'] = 'Um trabalho publicado precisa ter nota.'
+            if not self.data_defesa:
+                erros['data_defesa'] = 'Um trabalho publicado precisa ter data de defesa.'
+        if self.curso_id and self.titulo and self.ano and Trabalho.objects.exclude(pk=self.pk).filter(
+            curso_id=self.curso_id, titulo__iexact=self.titulo, ano=self.ano,
+        ).exists():
+            erros['titulo'] = 'Já existe trabalho com este título, curso e ano.'
+        if erros:
+            raise ValidationError(erros)
 
     def __str__(self):
         return self.titulo

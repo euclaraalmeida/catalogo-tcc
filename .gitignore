@@ -1,4 +1,6 @@
 backend/.venv/
+backend/.deps/
+backend/.tmp/
 __pycache__/
 *.py[cod]
 .env

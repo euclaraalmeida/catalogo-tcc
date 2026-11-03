@@ -1,81 +1,103 @@
-# Catálogo de TCCs — primeira metade
+# Catálogo de TCCs — RAD / IFPB
 
-Integrante informado: Maria Clara.
+Catálogo acadêmico com API Django REST Framework e cliente web independente. A API pública só permite leitura de trabalhos publicados; a API de gestão exige token.
 
-Implementados 10 dos 20 requisitos funcionais: RF1 a RF8, RF13 e RF15. Esta etapa contém apenas o projeto Django e a API pública de leitura.
+## Integrantes
 
-## Executar
+- Maria Clara — **confirmar nome completo**
+- **preencher nome completo da segunda integrante**
 
-No PowerShell, dentro de `backend`:
+> Antes da entrega, substituam os dois campos pelo nome completo de cada integrante e façam commits identificados pelas contas GitHub de ambas.
 
-```powershell
-.\.venv\Scripts\Activate.ps1
-python manage.py runserver
-```
+## Estrutura
 
-O ambiente local já está instalado. Para recriar:
+- `backend/`: projeto Django, API, migrations e banco SQLite com dados de demonstração.
+- `frontend/`: aplicação web independente, em HTML, CSS e JavaScript.
+
+## Como executar
+
+### API Django
+
+No PowerShell, na pasta `backend`:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe manage.py migrate
-.\.venv\Scripts\python.exe manage.py runserver
+.\\.venv\\Scripts\\Activate.ps1
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py preparar_coordenacao
+python manage.py runserver
 ```
+
+O comando `preparar_coordenacao` cria ou atualiza as duas contas de demonstração e imprime os tokens válidos para uso. Rode-o depois das migrations.
+
+### Front-end
+
+Em outro terminal, na pasta `frontend`:
+
+```powershell
+python -m http.server 5500
+```
+
+Abra <http://127.0.0.1:5500>. O cliente consulta a API em `http://127.0.0.1:8000`; ele não possui cópia local dos trabalhos. Se o Django estiver parado, a tela exibe uma mensagem de erro.
+
+## Contas de demonstração
+
+| Usuário | Senha | Token |
+| --- | --- | --- |
+| `coordenacao1` | `RadTcc2026!` | `3caf0920e2efbbd9d7cfc7ce206952abada644cf` |
+| `coordenacao2` | `RadTcc2026!` | `b21b499b6fc26f92153deb47e65a951d18a2dc71` |
+
+Use o token assim: `Authorization: Token <token>`. O token não deve ser enviado no JSON do trabalho. O campo `cadastrado_por` é preenchido pelo usuário autenticado.
 
 ## Endpoints
 
-| Método | Endereço | Resultado |
-| --- | --- | --- |
-| GET | `/api/v1/publico/` | Raiz da API navegável |
-| GET | `/api/v1/publico/trabalhos/` | Lista paginada de publicados |
-| GET | `/api/v1/publico/trabalhos/<id>/` | Detalhe de um publicado |
-| GET | `/api/v1/publico/estatisticas/` | Quantidades por ano, curso e cinco orientadores com mais publicados |
+| Método | Rota | Acesso | Função |
+| --- | --- | --- | --- |
+| POST | `/api/token/` | aberto | Obtém token com `username` e `password` |
+| GET | `/api/v1/publico/` | público | Raiz navegável da API pública |
+| GET | `/api/v1/publico/trabalhos/` | público | Lista paginada e publicada; aceita `search`, `ano`, `curso`, `palavra_chave`, `ordering` e `page` |
+| GET | `/api/v1/publico/trabalhos/<id>/` | público | Detalhe somente de trabalho publicado |
+| GET | `/api/v1/publico/estatisticas/` | público | Agregações por ano, curso e orientador |
+| GET, POST, PUT, PATCH, DELETE | `/api/gestao/trabalhos/` e `/api/gestao/trabalhos/<id>/` | token | CRUD de trabalhos |
+| GET, POST, PUT, PATCH, DELETE | `/api/gestao/cursos/`, `/orientadores/`, `/autores/`, `/palavras-chave/` (e detalhe por ID) | token | CRUD de cadastros de apoio |
+| GET | `/api/schema/` | aberto | Schema OpenAPI |
+| GET | `/api/docs/` | aberto | Documentação Swagger navegável |
 
-Exemplos no PowerShell:
+Exemplos de busca e filtro:
 
-```powershell
-curl.exe "http://127.0.0.1:8000/api/v1/publico/trabalhos/"
-curl.exe "http://127.0.0.1:8000/api/v1/publico/trabalhos/?search=acessibilidade"
-curl.exe "http://127.0.0.1:8000/api/v1/publico/trabalhos/?ano=2021&curso=1"
-curl.exe "http://127.0.0.1:8000/api/v1/publico/trabalhos/?palavra_chave=Acessibilidade&ordering=-ano&page=1"
-curl.exe "http://127.0.0.1:8000/api/v1/publico/estatisticas/"
+```text
+/api/v1/publico/trabalhos/?search=acessibilidade
+/api/v1/publico/trabalhos/?ano=2024&curso=1
+/api/v1/publico/trabalhos/?palavra_chave=educação&ordering=-ano&page=2
 ```
 
-`search` pesquisa título, resumo, nome de autor e nome de orientador. `ano`, `curso` (ID) e `palavra_chave` (termo exato, sem diferenciar maiúsculas) podem ser combinados entre si e com `search`. `ordering` aceita `ano`, `-ano`, `titulo` e `-titulo`. Cada página tem cinco itens; a resposta contém `count`, `next`, `previous` e `results`.
+Exemplo para obter token:
 
-## As três decisões da API pública
+```powershell
+curl.exe -X POST http://127.0.0.1:8000/api/token/ -H "Content-Type: application/json" -d '{"username":"coordenacao1","password":"RadTcc2026!"}'
+```
 
-1. **Registros e campos:** somente trabalhos com situação Publicado. A lista mostra ID, título, ano, nome e sigla do curso, nome do orientador e nomes dos autores. O detalhe acrescenta resumo, data de defesa, link do PDF, nome do coorientador e palavras-chave. Nota, e-mails, responsável pelo cadastro e trabalhos sem autorização de publicação não fazem parte da resposta. Um trabalho não publicado retorna 404 também pelo ID.
-2. **Versionamento:** a porta pública usa `/api/v1/publico/`. Campos dessa versão não serão removidos ou renomeados; uma alteração incompatível terá outra versão, mantendo a v1 disponível. A futura porta interna será `/api/gestao/`, sem versão no endereço, pois seu cliente será controlado pela coordenação e poderá ser atualizado em conjunto. A porta interna ainda não foi implementada.
-3. **Limite:** 20 requisições por minuto por IP, compartilhadas entre os endpoints públicos, usando `AnonRateThrottle` como nos slides. A chamada excedente recebe 429, mensagem em JSON e cabeçalho `Retry-After`. O cache local do Django controla a janela; reiniciar o processo limpa esse contador de desenvolvimento.
+## Decisões para a porta pública
 
-## Organização
+1. **Dados expostos:** somente trabalhos em situação `Publicado`. A lista contém título, ano, curso, orientador e nomes dos autores. O detalhe também fornece resumo, data de defesa, link do PDF, coorientador e palavras-chave. Nota, e-mails e responsável pelo cadastro ficam fora porque não são necessários à consulta pública. ID de trabalho não publicado retorna 404.
+2. **Versionamento:** a porta pública usa `/api/v1/publico/`; a porta interna usa `/api/gestao/`, sem versão. Clientes externos podem depender da promessa pública por tempo indeterminado, então mudanças incompatíveis exigem nova versão. O cliente interno é controlado pela coordenação e pode ser atualizado junto com a API.
+3. **Limite:** clientes anônimos têm 20 requisições por minuto por IP. Ao exceder o limite, a API responde `429 Too Many Requests` em JSON e inclui `Retry-After`. O contador usa o cache local do Django e reinicia com o processo de desenvolvimento.
 
-`TrabalhoPublicoViewSet` usa `ReadOnlyModelViewSet` com `DefaultRouter` para lista e detalhe do recurso, sem oferecer escrita. O serializer de detalhe acrescenta campos ao serializer público de lista. A futura escrita terá seu próprio serializer.
+## Organização e validações
 
-As estatísticas usam `@api_view(['GET'])`, pois representam uma consulta agregada, não um CRUD. Os totais são calculados pelo banco com `Count`. Relacionamentos da listagem são carregados com `select_related` e `prefetch_related`.
+- `TrabalhoPublicoViewSet` usa `ReadOnlyModelViewSet` e router para lista e detalhe públicos.
+- Estatísticas usam `@api_view(['GET'])`, pois são agregações e não um CRUD de entidade.
+- Os recursos de gestão usam `ModelViewSet` e routers. A autenticação é por token e as operações exigem usuário autenticado.
+- Serializers públicos e de gestão são classes separadas. A porta pública recorta os campos e o queryset; a porta de gestão recebe os dados editáveis.
+- Ano futuro, publicação sem nota ou data de defesa, quantidade de autores fora de 1–2 e título repetido no mesmo curso e ano geram erros de validação em JSON.
+- Estatísticas são calculadas com agregações do banco e não armazenadas em campos.
+- `select_related` e `prefetch_related` reduzem consultas no catálogo.
 
-Foram usados os recursos apresentados nos slides da aula 8: `ModelSerializer`, relacionamentos de leitura, ViewSet, router, `AllowAny`, `SearchFilter`, `OrderingFilter`, `PageNumberPagination`, `AnonRateThrottle` e `django-filter`. Não há templates próprios, formulários Django ou comentários no código.
+## Dados de demonstração
 
-## Banco desta etapa
+O banco SQLite incluído contém 4 cursos, 8 orientadores, 32 autores, 15 palavras-chave e 30 trabalhos de 2021 a 2026. Há trabalhos publicados, defendidos e em andamento, incluindo trabalhos com dois autores. Os dados são fictícios e os links de PDF são ilustrativos.
 
-O `backend/db.sqlite3` acompanha a atividade com quatro cursos, oito orientadores, 32 autores, 15 palavras-chave e 30 trabalhos distribuídos entre 2021 e 2026. Há 24 publicados, três defendidos e três em andamento. Dois trabalhos têm dois autores, e as palavras-chave são reutilizadas. Nomes e dados são fictícios; os links de PDF em `example.com` são ilustrativos.
+## Entrega
 
-Duas contas identificam quem cadastrou os trabalhos: `coordenacao1` e `coordenacao2`. Tokens e acesso à porta fechada ficam para a segunda metade.
-
-## O que falta para os outros 50%
-
-| Requisito | Pendente |
-| --- | --- |
-| RF9 | Autenticação por token |
-| RF10 | CRUD de trabalhos pela coordenação |
-| RF11 | CRUD dos cadastros de apoio |
-| RF12 | Validações de ano, publicação, autores e unicidade |
-| RF14 | Schema OpenAPI e documentação navegável |
-| RF16 | Front-end separado e configuração de CORS |
-| RF17 | Listagem no front-end |
-| RF18 | Busca e filtro no front-end |
-| RF19 | Detalhe no front-end |
-| RF20 | Estados de vazio e erro no front-end |
-
-A tecnologia do front-end, o segundo integrante e as credenciais com tokens serão registrados quando essa parte for realizada. Não há repositório Git inicializado nem envio ao GitHub nesta etapa.
+O repositório deve ser público e submetido no Google Sala de Aula. Antes de enviar, preencham os nomes completos acima, confirmem os tokens no banco que será entregue e façam commits atribuídos aos dois integrantes.
